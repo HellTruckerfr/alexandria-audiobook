@@ -75,6 +75,12 @@ FIXES TO APPLY:
 
    Do NOT shorten or simplify instructs that are already valid physical voice descriptions.
    A rich instruct like "Cold fury, barely contained, voice tight and clipped" is correct — keep it.
+6. SYSTEM MESSAGES
+   Any text enclosed in square brackets [like this] must be assigned to speaker "SYSTEM".
+   Remove the brackets from the text field.
+   instruct MUST always be exactly: "Robotic and metallic, flat synthesized voice, cold and mechanical, no human warmth whatsoever."
+   If a NARRATOR or CHARACTER entry contains bracketed text, extract it as a SYSTEM entry.
+
 ---SEPARATOR---
 {context}
 

@@ -584,9 +584,9 @@ class TTSEngine:
             except Exception as _e:
                 print(f"Gender detection failed for {speaker}: {_e}")
             is_f = gender == "female"
-            adapter = "feminine_fr_1774743389" if is_f else "narrator_fr_v2_1774774816"
-            print(f"Auto-assigned {'feminine_fr' if is_f else 'narrator_fr_v2'} to unknown: {speaker}")
-            voice_data = {"type": "lora", "voice": "feminine_fr" if is_f else "narrator_fr_v2",
+            adapter = "narrator_fr_v3_1774963190" if is_f else "narrator_fr_v3_1774963190"
+            print(f"Auto-assigned {'feminine_fr' if is_f else 'narrator_fr_v3'} to unknown: {speaker}")
+            voice_data = {"type": "lora", "voice": "narrator_fr_v3" if is_f else "narrator_fr_v3",
                 "adapter_id": adapter, "adapter_path": f"lora_models/{adapter}",
                 "character_style": "", "default_style": "", "seed": "-1",
                 "ref_audio": None, "ref_text": None, "description": ""}
@@ -601,7 +601,7 @@ class TTSEngine:
                     _vc[speaker] = voice_data
                     with open(vc_path, "w", encoding="utf-8") as _f2:
                         _json2.dump(_vc, _f2, indent=2, ensure_ascii=False)
-                    print(f"voice_config.json mis a jour: {speaker} -> {'feminine_fr' if is_f else 'narrator_fr_v2'}")
+                    print(f"voice_config.json mis a jour: {speaker} -> {'feminine_fr' if is_f else 'narrator_fr_v3'}")
             except Exception as _e2:
                 print(f"Sauvegarde voice_config echouee pour {speaker}: {_e2}")
 

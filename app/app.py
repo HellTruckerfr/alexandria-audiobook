@@ -2123,25 +2123,74 @@ async def batch_pipeline_start(request: BatchPipelineRequest, background_tasks: 
             def ss(step, st, _ch=ch): _ch["steps"][step] = st
 
             try:
-                with open(ch["path"], "rb") as f:
-                    r = req.post(f"{ALEX}/api/upload", files={"file": (os.path.basename(ch["path"]), f, "text/plain")})
-                if r.status_code != 200: raise Exception(f"Upload: {r.text}")
+                # Vérifie si le script existe déjà en cache
+                scripts_cache_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts_cache")
+                os.makedirs(scripts_cache_dir, exist_ok=True)
+                script_cache_path = os.path.join(scripts_cache_dir, f"{ch['name']}.json")
+                if os.path.exists(script_cache_path):
+                    logger.info(f"Script cache trouvé pour {ch['name']} — skip LLM+review")
+                    # Upload le fichier texte pour initialiser le projet
+                    with open(ch["path"], "rb") as f:
+                        r = req.post(f"{ALEX}/api/upload", files={"file": (os.path.basename(ch["path"]), f, "text/plain")})
+                    if r.status_code != 200: raise Exception(f"Upload: {r.text}")
+                    # Charge le script caché via l'endpoint load_script
+                    r = req.post(f"{ALEX}/api/load_script", json={"path": script_cache_path})
+                    if r.status_code != 200:
+                        logger.warning(f"load_script failed, regenerating: {r.text}")
+                        raise Exception("cache_miss")  # Force régénération
+                    ss("llm","done"); ss("verif","done")
+                else:
+                    with open(ch["path"], "rb") as f:
+                        r = req.post(f"{ALEX}/api/upload", files={"file": (os.path.basename(ch["path"]), f, "text/plain")})
+                    if r.status_code != 200: raise Exception(f"Upload: {r.text}")
 
-                ss("llm","running")
-                r = req.post(f"{ALEX}/api/generate_script")
-                if r.status_code != 200: raise Exception(f"Script: {r.text}")
-                for _ in range(120):
-                    time.sleep(3)
-                    if not req.get(f"{ALEX}/api/status/script").json().get("running",True): break
-                ss("llm","done")
+                    ss("llm","running")
+                    r = req.post(f"{ALEX}/api/generate_script")
+                    if r.status_code != 200: raise Exception(f"Script: {r.text}")
+                    for _ in range(120):
+                        time.sleep(3)
+                        if not req.get(f"{ALEX}/api/status/script").json().get("running",True): break
+                    ss("llm","done")
 
-                ss("verif","running")
-                r = req.post(f"{ALEX}/api/review_script")
-                if r.status_code == 200:
-                    for _ in range(60):
-                        time.sleep(2)
-                        if not req.get(f"{ALEX}/api/status/review").json().get("running",True): break
-                ss("verif","done")
+                    ss("verif","running")
+                    r = req.post(f"{ALEX}/api/review_script")
+                    if r.status_code == 200:
+                        for _ in range(60):
+                            time.sleep(2)
+                            if not req.get(f"{ALEX}/api/status/review").json().get("running",True): break
+                    ss("verif","done")
+
+                    # Sauvegarde le script généré dans le cache via l'API
+                    try:
+                        ann_r = req.get(f"{ALEX}/api/annotated_script")
+                        if ann_r.status_code == 200:
+                            with open(script_cache_path, "w", encoding="utf-8") as _sf:
+                                _sf.write(ann_r.text)
+                            logger.info(f"Script sauvegardé dans cache: {ch['name']}.json")
+                    except Exception as _ce:
+                        logger.warning(f"Impossible de sauvegarder le script cache: {_ce}")
+
+                # Détecte et enregistre les nouveaux personnages AVANT la génération TTS
+                try:
+                    chunks_preview = req.get(f"{ALEX}/api/chunks").json()
+                    vc_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "voice_config.json")
+                    with open(vc_path, "r", encoding="utf-8") as _f:
+                        _vc = json.load(_f)
+                    new_speakers = {c.get("speaker","") for c in chunks_preview if c.get("speaker","") and c.get("speaker","") not in _vc}
+                    if new_speakers:
+                        logger.info(f"Nouveaux personnages détectés: {new_speakers}")
+                        for spk in new_speakers:
+                            _vc[spk] = {"type": "lora", "voice": "narrator_fr_v3",
+                                "adapter_id": "narrator_fr_v3_1774963190",
+                                "adapter_path": "lora_models/narrator_fr_v3_1774963190",
+                                "character_style": "", "default_style": "", "seed": "-1",
+                                "ref_audio": None, "ref_text": None, "description": ""}
+                            logger.info(f"Auto-assigned narrator_fr_v3 to: {spk}")
+                        with open(vc_path, "w", encoding="utf-8") as _f:
+                            json.dump(_vc, _f, indent=2, ensure_ascii=False)
+                        logger.info(f"{len(new_speakers)} nouveaux personnages sauvegardés dans voice_config.json")
+                except Exception as _ve:
+                    logger.warning(f"Pre-TTS voice detection failed: {_ve}")
 
                 ss("tts","running"); ch["tts_progress"] = 0
                 cleaned = 0

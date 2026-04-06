@@ -730,7 +730,7 @@ class ProjectManager:
 
         # Sépare les chunks LoRA et non-LoRA
         # Les personnages inconnus (custom/Aiden = défaut Alexandria) sont reclassés en LoRA narrator_fr_v2
-        DEFAULT_ADAPTERS = {"male": "narrator_fr_v3_1774963190", "female": "feminine_fr_1774743389"}
+        DEFAULT_ADAPTERS = {"male": "narrator_fr_v3_1774963190", "female": "narrator_fr_v3_1774963190"}
         for i in indices:
             if 0 <= i < len(chunks):
                 spk = chunks[i].get('speaker','')
