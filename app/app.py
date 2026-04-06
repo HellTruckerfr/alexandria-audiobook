@@ -2133,12 +2133,36 @@ async def batch_pipeline_start(request: BatchPipelineRequest, background_tasks: 
                     with open(ch["path"], "rb") as f:
                         r = req.post(f"{ALEX}/api/upload", files={"file": (os.path.basename(ch["path"]), f, "text/plain")})
                     if r.status_code != 200: raise Exception(f"Upload: {r.text}")
-                    # Charge le script caché via l'endpoint load_script
-                    r = req.post(f"{ALEX}/api/load_script", json={"path": script_cache_path})
-                    if r.status_code != 200:
-                        logger.warning(f"load_script failed, regenerating: {r.text}")
-                        raise Exception("cache_miss")  # Force régénération
-                    ss("llm","done"); ss("verif","done")
+                    # Charge le script caché directement via l'API annotated_script
+                    try:
+                        # Copie le script cache dans SCRIPTS_DIR d'Alexandria
+                        import shutil as _shu3
+                        alex_scripts_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+                        os.makedirs(alex_scripts_dir, exist_ok=True)
+                        alex_script_dst = os.path.join(alex_scripts_dir, f"{ch['name']}.json")
+                        _shu3.copy2(script_cache_path, alex_script_dst)
+                        # Charge via l'endpoint officiel
+                        r = req.post(f"{ALEX}/api/scripts/load", json={"name": ch["name"]})
+                        if r.status_code != 200:
+                            raise Exception(f"scripts/load: {r.text}")
+                        ss("llm","done"); ss("verif","done")
+                    except Exception as _le:
+                        logger.warning(f"Cache load failed ({_le}), regenerating...")
+                        # Fallback — régénère normalement
+                        ss("llm","running")
+                        r = req.post(f"{ALEX}/api/generate_script")
+                        if r.status_code != 200: raise Exception(f"Script: {r.text}")
+                        for _ in range(120):
+                            time.sleep(3)
+                            if not req.get(f"{ALEX}/api/status/script").json().get("running",True): break
+                        ss("llm","done")
+                        ss("verif","running")
+                        r = req.post(f"{ALEX}/api/review_script")
+                        if r.status_code == 200:
+                            for _ in range(60):
+                                time.sleep(2)
+                                if not req.get(f"{ALEX}/api/status/review").json().get("running",True): break
+                        ss("verif","done")
                 else:
                     with open(ch["path"], "rb") as f:
                         r = req.post(f"{ALEX}/api/upload", files={"file": (os.path.basename(ch["path"]), f, "text/plain")})
